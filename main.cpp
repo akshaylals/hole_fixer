@@ -6,8 +6,8 @@
 #include <igl/decimate.h>
 #include <igl/shortest_edge_and_midpoint.h>
 #include <igl/harmonic.h>
-#include <igl/readOFF.h>
-#include <igl/writeOFF.h>
+#include <igl/readPLY.h>
+#include <igl/writePLY.h>
 
 using Eigen::VectorXi;
 using Eigen::MatrixXd;
@@ -23,8 +23,8 @@ void printHelpExit() {
 
 	printf("OPTIONS: \n");
 
-	printf("  -in\t\t\ttarget mesh file in .off-format, with a hole\n");
-	printf("  -out\t\t\toutput mesh file in .off-format\n");
+	printf("  -in\t\t\ttarget mesh file in .ply-format, with a hole\n");
+	printf("  -out\t\t\toutput mesh file in .ply-format\n");
 	printf("  -outfaces\t\tHow many faces to decimate the mesh to\n");
 	printf("  -upsample\t\tHow much upsampling to use when creating the patch\n");
 
@@ -69,6 +69,24 @@ bool parseIntParam(const char* param, int argc, char* argv[], unsigned int& out)
 	}
 }
 
+bool parseCoordParam(const char* param, int argc, char* argv[], VectorXd& out) {
+	const char* token = findToken(param, argc, argv);
+	if (token == nullptr)
+		return false;
+	
+	double x, y, z;
+
+	int r = sscanf(token, "%lf,%lf,%lf", &x, &y, &z);
+
+	if (r != 3 || r == EOF) {
+		return false;
+	}
+	else {
+		out<<x,y,z;
+		return true;
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	
@@ -86,12 +104,15 @@ int main(int argc, char *argv[])
 
 	unsigned int upsampleN;
 	if (!parseIntParam("-upsample", argc, argv, upsampleN)) printHelpExit();
-	
+
+	VectorXd offset(3);
+	if (!parseCoordParam("-offset", argc, argv, offset)) printHelpExit();
+
 	// original mesh vertices and indices. This is the original mesh, which has a hole.
 	MatrixXd originalV;
 	MatrixXi originalF;
 
-	if (!igl::readOFF(inFile, originalV, originalF)) {
+	if (!igl::readPLY(inFile, originalV, originalF)) {
 		printHelpExit();
 	}
 
@@ -115,6 +136,7 @@ int main(int argc, char *argv[])
 		MatrixXd A = originalV;
 		igl::slice(A, R, C, B);
 		bcenter = (1.0f / originalLoop.size()) * B.colwise().sum();
+		bcenter += offset;
 	}
 
 	// a flat patch that fills the hole.
@@ -279,6 +301,6 @@ int main(int argc, char *argv[])
 	VectorXi temp0; VectorXi temp1;
 	igl::decimate(fairedV, fairedF, outFacesN, finalV, finalF, temp0, temp1);
 	
-	igl::writeOFF(outFile, finalV, finalF);
+	igl::writePLY(outFile, finalV, finalF);
 }
 
